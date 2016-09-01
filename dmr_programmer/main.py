@@ -4,6 +4,7 @@ import os
 import sys
 import cmd
 import glob
+import shlex
 import chirp.chirp_common as cc
 import chirp.errors
 from chirp.dmr import *
@@ -37,8 +38,8 @@ class DMRsh( cmd.Cmd ):
             ]
     prompt = " $ "
     intro = """
-    This is the DMR Programmer shell. It supports tab completion most times.
-    You can load data from a radio or file, edit the values, save them, and sync them back.
+    This is the DMR Programmer shell. It supports tab completion some times (try the tab key).
+    You can load data from a radio or file, edit some values, save them, and sync them back.
 
     Type "help" and press enter to get started.
 
@@ -46,8 +47,10 @@ class DMRsh( cmd.Cmd ):
         select <model>
         load <radio image file> (or) sync in
         to_csv <somename>
-        edit somename*.csv
+        edit <somename>
             an editor launches to change the various files
+            the specific editor is controlled by your EDITOR environment variable.
+        from_csv <somename>
         save <radio image file> (and/or) sync out
 
     
@@ -58,8 +61,10 @@ class DMRsh( cmd.Cmd ):
         return line.split(' ')
 
     def do_edit( self, line ):
+        args = self.parse( line )
+        filename = args[0]
         try:
-            os.system("$EDITOR %s"%(line))
+            os.system("$EDITOR %s*.csv"%(filename))
         except Exception as e:
             print(e)
         # def edit(filename):
@@ -118,6 +123,8 @@ class DMRsh( cmd.Cmd ):
         if self.current:
             try:
                 if args[0] == "in":
+                    if self.model == None:
+                        self.model = self.current(None)
                     self.model.sync_in()
                 elif args[0] == "out":
                     self.model.sync_out()
@@ -182,20 +189,207 @@ class DMRsh( cmd.Cmd ):
         res = [os.path.basename(name) for name in res]
         return res
 
-    def do_configure( self, line ):
+
+    # National simplex
+    # UHF    1) 441.0000   2) 446.5000   3) 446.0750   4-US & Europe 433.450
+    # nedecn: 446.075
+    # VHF     1) 145.7900   2) 145.5100
+    # TG ID: 99  /  CC 1  /  TS 1  /  "Admit Criteria": Always  /  "In Call Criteria": TXI or Always
+
+    # networks
+    #   DMR-MARC, New england trbo?
+    #   DCI, dmrx, brandmeister, PRN, 
+
+    def base_parse(self, ctx):
+        select_or_set = 0 #0 for select, >0 for set
+        selectme = {}
+        setme = {}
+        bo = None
+        lpt = None
+        ltok = None
+        for tok in ctx:
+            pt, v = tok
+            if pt == "BIG":
+                bo = v
+            elif pt == "WITH":
+                select_or_set = 1
+
+            if not select_or_set and lpt in ["ATTR","KEY"]: #selecting
+                selectme[ ltok ] = v
+            elif select_or_set and lpt in ["ATTR","KEY"]: #setting
+                setme[ ltok ] = v
+            ltok = v
+            lpt = pt
+        print( "SELECTME",selectme, "SETME",setme )
+        return (bo, selectme, setme)
+
+
+    def fn_add(self, ctx):
+        bo, selectme, setme = self.base_parse(ctx)
+        bos = getattr(self.model, self.myobjects[ bo ])
+        # add( **setme)
+
+    def fn_show(self, ctx):
+        bo, selectme, setme = self.base_parse(ctx)
+        bos = getattr(self.model, self.myobjects[ bo ])
+        if len(selectme.keys()) > 0:
+            print( selectme)
+            these = bos.find( **selectme )
+        else:
+            these = bos
+        for each in these:
+            print(each)
+
+
+
+    def fn_configure(self, ctx):
+        bo, selectme, setme = self.base_parse(ctx)
+        bos = getattr(self.model, self.myobjects[ bo ])
+        # these = bos.find( **selectme )
+        # these.set( **setme )
+        # these.set( selectme, setme )
+        bos.set( selectme, setme)
+
+    def fn_delete(self, ctx):
+        bo, selectme, setme = self.base_parse(ctx)
+        # bos = getattr(self.model, self.myobjects[ bo ])
+        # these = bos.find( **selectme )
+        # delete these
+        print(these)
+
+    objects = {
+            "contact":DMRContact,
+            "rxgroup":DMRRXGroup,
+            "contacts":DMRContactList,
+            "rxgroups":DMRRXGroupList,
+            "channel":DMRMemory,
+            "bank":cc.MTOBankModel
+            }
+    myobjects = {
+            "contact":"contacts",
+            "rxgroup":"rxgroups",
+            "contacts":"contacts",
+            "rxgroups":"rxgroups",
+            "channel":"memories", #?
+            "bank": "get_bank_model" #?
+            }
+                # "contacts","rxgroups","channels","banks"]
+    actions = {
+            "add": fn_add,
+            "show":fn_show,
+            "configure": fn_configure,
+            "delete": fn_delete,
+            }
+    def default( self,line ):
         args = self.parse(line)
-        #possible first args:
-        #   contact
-        #   rxgroup
-        #   channel
-        #   bank
-    def do_add( self, line ):
-        args = self.parse(line)
-        #possible first args:
-        #   contact
-        #   rxgroup
-        #   channel
-        #   bank
+
+        def fieldlookup(oname, tok):
+            if not oname:
+                return False
+            # print("fieldlookup", oname, tok)
+            test = self.objects[ oname ]()
+
+            try:
+                if hasattr(test, tok) or hasattr(test,"_"+tok):
+                    return "ATTR"
+            except:
+                pass
+            try:
+                if tok in test or "_"+tok in test:
+                    return "KEY"
+            except:
+                pass
+
+            # print(test, tok)
+            return False
+
+        if args[0] in self.actions:
+            lex = shlex.shlex(line, posix=True)
+            ctx = []
+            actions = self.actions.keys()
+            bigobjects = self.objects.keys()
+            lasttok = None
+            lastattr = None
+            bo = None
+            for tok in lex:
+                t = fieldlookup(bo, tok)
+                if tok.lower() == "with":
+                    tok = ("WITH", tok)
+                elif tok in actions:
+                    tok = ("ACT", tok)
+                elif tok in bigobjects:
+                    bo = tok
+                    tok = ("BIG", tok)
+                elif bo in bigobjects and t:
+                    tok = ( t, tok)
+                    lastattr = tok
+                elif lasttok[0] in ["ATTR","KEY"]:
+                    tok = ("VALUE", tok)
+                else:
+                    tok = ("UNK", tok)
+                print(tok)
+                ctx.append( tok )
+                lasttok = tok
+
+            if not self.model:
+                print("Select a radio and load an image first.")
+                return
+            else:
+                if ctx[0][0] == "ACT":
+                    self.actions[ ctx[0][1] ](self, ctx)
+                else:
+                    print("Not sure what to do: ")
+                    print( ctx )
+        else:
+            try:
+                os.system(line)
+            except Exception as e:
+                print(e)
+
+        #
+        # banks centered around sending to a talkgroup across multiple repeaters in an area
+        #       a single talkgroup with related talkgroups to listen to (regional, state, etc)
+        #       across multiple close-by repeaters
+        #
+        # banks centered around specific repeaters (talk to tg9, listen to selected regional talkgroups)
+        #       
+        # hybrid, one channel for each TS of each repeater, so 8 repeaters per zone, local zone only and regional zone only depending on TS layout?
+                # add channels repeater location Massachusetts mode DMR band UHF name dmr_ma_uhf
+        #
+
+        """
+        syntax target (from clean slate):
+            (import repeaters database)
+            edit bank 1 name "mike was here" or add bank name "mike also here" (note no index)
+            edit bank "mike was here" style [ manual, repeater, talkgroup, hybrid]
+            for manual:
+                nothing special, everything done manually with some help
+            for hybrid:
+                build off manual, choose a single talkgroup per timeslot:
+                    e.g. TS1 is always 3172, TS2 is always 3125
+                and then add 8 repeaters with that setup
+
+            for repeater:
+                add channel[s] "w2fbi" repeater callsign W2FBI
+                    make a "base" dmrmemory that has the details for this single repeater
+                    tag it with the text after "channel[s]" as the identifier
+                edit c "w2fbi" ts 1 tg 3172 310 311 3
+                                where the first one is the "txgroup" and the rest go in the rxgroup
+                edit c "w2fbi" ts 2 tg 3125 9 8
+
+                edit bank "mike was here" add channels "w2fbi"
+
+            for talkgroup:
+                add channel[s] "ma_dmr" repeaters location Massachusetts, United States 
+                edit channels "ma_dmr" add talkgroup 3125 on timeslot 2
+                add bank "ma_dmr" with channels "ma_dmr"
+        """
+
+                
+    def completedefault( self, text, line, begidx, endidx ):
+        return []
+
+
 
 
     def do_to_csv( self, line ):
@@ -245,12 +439,6 @@ class DMRsh( cmd.Cmd ):
         else:
             print("Select a radio first")
 
-    def do_rm( self, line ):
-        try:
-            os.system("rm %s"%(line))
-        except Exception as e:
-            print(e)
-
     def do_eval( self, line ):
         try:
             print(eval(line))
@@ -259,6 +447,8 @@ class DMRsh( cmd.Cmd ):
 
     def do_EOF( self, arg ):
         return True
+    def do_exit( self, line):
+        sys.exit(0)
 
     def updateprompt( self ):
         self.prompt = self.promptbase
@@ -268,6 +458,19 @@ class DMRsh( cmd.Cmd ):
         else:
             for l in self.levels:
                 self.prompt = "["+l+"]" + self.prompt
+
+    #later: add location support for repeater adding
+    # http://stackoverflow.com/questions/9532369/where-can-i-find-city-town-location-data-for-location-based-searching
+    def do_test( self, line ):
+        self.dmrdump = DMRDump()
+
+        for r in self.dmrdump.find(country="United States",state="Massachusetts"):
+            print(r['callsign'])
+            # mem = repeater_to_memory( r)
+
+        print( self.dmrdump.fieldcount("ipsc_network", country="United States", state="Massachusetts") )
+        print( self.dmrdump.fieldcount("state", country="United States") )
+        print( self.dmrdump.fieldcount("country" ) )
 
     def precmd( self, line):
         self.updateprompt()
