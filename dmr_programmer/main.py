@@ -354,6 +354,19 @@ class DMRsh( cmd.Cmd ):
         # hybrid, one channel for each TS of each repeater, so 8 repeaters per zone, local zone only and regional zone only depending on TS layout?
                 # add channels repeater location Massachusetts mode DMR band UHF name dmr_ma_uhf
         #
+        #   tg centric banks require an easily accessible talkgroup listing per-repeater, of which none are easily parsable except by humans. Something to be fixed!
+        #
+        #   for each repeater-centric bank, make an rxgroup for each timeslot like W2FBI_1 where 1 is the timeslot
+        #       then, for each tg that isn't some sentinel (0?) in the rxgroup, make a channel where it is the txgroup and has that same rxgroup
+        #       then, make a bank for it (usually won't be over 16 channels, but if it is, make more banks until it fits, sorted by timeslot if possible?)
+        #       add the channels to the bank
+        #       program
+        #
+        #   for each hybrid bank, get 8 repeaters from the user. 
+        #       Each repeater will get an rxgroup for each timeslot where the first tg in the rxgroup will then be used as the tx group.
+        #
+        #
+        #   TODO resolve contact references in rxgroups
 
         """
         syntax target (from clean slate):
