@@ -64,7 +64,7 @@ class DMRsh( cmd.Cmd ):
         args = self.parse( line )
         filename = args[0]
         try:
-            os.system("$EDITOR %s*.csv"%(filename))
+            os.system("$EDITOR %s_*.csv"%(filename))
         except Exception as e:
             print(e)
         # def edit(filename):
@@ -239,8 +239,6 @@ class DMRsh( cmd.Cmd ):
             these = bos
         for each in these:
             print(each)
-
-
 
     def fn_configure(self, ctx):
         bo, selectme, setme = self.base_parse(ctx)
@@ -482,6 +480,14 @@ class DMRsh( cmd.Cmd ):
 
     def preloop( self ):
         self.updateprompt()
+        try:
+            fh = open("my.script","r")
+            for line in fh:
+                self.onecmd( line.strip() )
+        except Exception as e:
+            print(e)
+
+
 
     def emptyline( self ):
         return
