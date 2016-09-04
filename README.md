@@ -32,7 +32,12 @@ radio to_csv
 [DMRsh][md380] $ eval self.model.add_memories( self.dmrdump.rxgroups_and_repeaters_to_memories( self.model, ("NEDECN_1","NEDECN_2"), self.dmrdump.find(ipsc_network="NE-TRBO") ) )
 # lots of output, or a failure.
 
+# NEDECN_1 is an rxgroup for the NEDECN talkgroups that are commonly on timeslot 1, NEDECN_2 is similar for TS2.
+# assuming it works, there are now 47 more repeaters from the NE-TRBO network programmed than previously, 
+#  each with two memories (one for each timeslot), 
+#   each of which uses the first contact of the specified rxgroup as the txgroup.
+
 [DMRsh][md380] $ sync out
 ```
 
-It's a work in progress.
+It's a work in progress. More to come.
