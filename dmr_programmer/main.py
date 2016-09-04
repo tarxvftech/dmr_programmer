@@ -518,10 +518,13 @@ class DMRsh( cmd.Cmd, object ):
         return stop
 
     def preloop( self ):
-        fh = open("my.script","r")
-        for line in fh:
-            if not line.strip().startswith('#'):
-                self.onecmd( line.strip() )
+        try:
+            fh = open("my.script","r")
+            for line in fh:
+                if not line.strip().startswith('#'):
+                    self.onecmd( line.strip() )
+        except:
+            pass
 
         self.updateprompt()
 

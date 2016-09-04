@@ -1,15 +1,38 @@
-Alright, bear with me. The code is terrible, and buggy, and requires some patches to Chirp, and my fork of md380tools.
+There's some ugly code, and no guarantees here at all.
 
+Clone this repo as a subdirectory of an empty directory. Then, run quickstart.sh from within this repo.
 
-The chirp symlink should point to the `chirp_fork/chirp/` directory if using my chirp fork.
+Example of neat things it can do right now (it's a work in progress, and not friendly yet):
 
-The md380tools symlink should point to your md380tools repository. Or, rather, mine. (I should work on that.)
+```sh
+$ source env/bin/activate
+$ bash grab.sh
+--2016-09-04 07:50:18--  http://www.dmr-marc.net/cgi-bin/trbo-database/datadump.cgi?table=repeaters&format=json
+Resolving www.dmr-marc.net (www.dmr-marc.net)... 109.69.110.230, 44.103.0.25
+Connecting to www.dmr-marc.net (www.dmr-marc.net)|109.69.110.230|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 1062081 (1.0M) [text/html]
+Saving to: ‘datadump.json’
 
-The drivers/ directory should have a symlink to the `md380tools/chirp/md380.py` driver.
+datadump.json               100%[==========================================>]   1.01M   786KB/s    in 1.3s    
 
-You can try and run this (It's a really basic "shell" for managing DMR radios) with `./dmr-programmer` and it will probably fail. 
+2016-09-04 07:50:20 (786 KB/s) - ‘datadump.json’ saved [1062081/1062081]
 
-If it doesn't fail, hopefully it can explain itself enough to be used.
+$ ./dmr-programmer
+[DMRsh] $ select md380
+[DMRsh][md380] $ sync in
+Done.
+[DMRsh][md380] $ to_csv myfile
+radio to_csv
+[DMRsh][md380] $ edit myfile
+# Your edit will launch to edit three files - contacts, memories, and rxgroups.
+# When you save and quit from your editor, dmr-programmer will be running again.
+# In this session, I added contacts and rxgroups to use NEDECN.
 
+[DMRsh][md380] $ eval self.model.add_memories( self.dmrdump.rxgroups_and_repeaters_to_memories( self.model, ("NEDECN_1","NEDECN_2"), self.dmrdump.find(ipsc_network="NE-TRBO") ) )
+# lots of output, or a failure.
 
+[DMRsh][md380] $ sync out
+```
 
+It's a work in progress.
