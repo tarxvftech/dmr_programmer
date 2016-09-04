@@ -24,7 +24,7 @@ def mkdir_p(path):
             raise
 
 
-class DMRsh( cmd.Cmd ):
+class DMRsh( cmd.Cmd, object ):
     """DMR shell"""
     radios = {"md380": md380.MD380Radio}
     current = None
@@ -57,6 +57,42 @@ class DMRsh( cmd.Cmd ):
     """
     # base = sys.argv[1]
     # image = base + ".img"
+    def __init__(self):
+        super( DMRsh, self).__init__()
+        self.dmrdump = DMRDump()
+        self.objects = {
+                "contact":["name","callid","flags"],
+                "rxgroup":["name","cidxs"],
+                "contacts":["name","callid","flags"],
+                "rxgroups":["name","cidxs"],
+                "channel":[p for p in dir(DMRMemory) if isinstance(getattr(DMRMemory,p), property)],
+                "bank":cc.MTOBankModel,
+                "repeater":["callsign","country","state","city","locator",
+                            "frequency","color_code","offset","ipsc_network",
+                            ],
+                "repeaters":["callsign","country","state","city","locator",
+                            "frequency","color_code","offset","ipsc_network",
+                            ],
+                }
+        self.myobjects = {
+                "contact":"contacts",
+                "rxgroup":"rxgroups",
+                "contacts":"contacts",
+                "rxgroups":"rxgroups",
+                "channel":"memories", #?
+                "bank": "get_bank_model", #?
+                "repeater": "dmrdump",
+                "repeaters": "dmrdump",
+                }
+                    # "contacts","rxgroups","channels","banks"]
+        self.actions = {
+                "add": self.fn_add,
+                "show":self.fn_show,
+                "configure": self.fn_configure,
+                "delete": self.fn_delete,
+                "count": self.fn_count,
+                }
+
     def parse( self, line ):
         return line.split(' ')
 
@@ -226,19 +262,38 @@ class DMRsh( cmd.Cmd ):
 
     def fn_add(self, ctx):
         bo, selectme, setme = self.base_parse(ctx)
-        bos = getattr(self.model, self.myobjects[ bo ])
-        # add( **setme)
+        # bos = getattr(self.model, self.myobjects[ bo ])
+        print(bo, selectme)
+        if bo.lower() in ["repeater","repeaters"]:
+            self.model.add_memories_from_repeater( self.dmrdump, **selectme)
 
-    def fn_show(self, ctx):
+    def fn_fetch(self, ctx):
         bo, selectme, setme = self.base_parse(ctx)
-        bos = getattr(self.model, self.myobjects[ bo ])
+        try:
+            bos = getattr(self.model, self.myobjects[ bo ])
+        except AttributeError as e:
+            pass
+        try:
+            bos = getattr(self, self.myobjects[ bo ])
+        except AttributeError as e:
+            pass
+
         if len(selectme.keys()) > 0:
             print( selectme)
             these = bos.find( **selectme )
         else:
             these = bos
+        return these
+
+    def fn_count( self, ctx):
+        these = self.fn_fetch(ctx)
+        print("Rows: %d"%len(these))
+
+    def fn_show( self, ctx):
+        these = self.fn_fetch(ctx)
         for each in these:
             print(each)
+        
 
     def fn_configure(self, ctx):
         bo, selectme, setme = self.base_parse(ctx)
@@ -255,51 +310,19 @@ class DMRsh( cmd.Cmd ):
         # delete these
         print(these)
 
-    objects = {
-            "contact":DMRContact,
-            "rxgroup":DMRRXGroup,
-            "contacts":DMRContactList,
-            "rxgroups":DMRRXGroupList,
-            "channel":DMRMemory,
-            "bank":cc.MTOBankModel
-            }
-    myobjects = {
-            "contact":"contacts",
-            "rxgroup":"rxgroups",
-            "contacts":"contacts",
-            "rxgroups":"rxgroups",
-            "channel":"memories", #?
-            "bank": "get_bank_model" #?
-            }
-                # "contacts","rxgroups","channels","banks"]
-    actions = {
-            "add": fn_add,
-            "show":fn_show,
-            "configure": fn_configure,
-            "delete": fn_delete,
-            }
     def default( self,line ):
         args = self.parse(line)
 
         def fieldlookup(oname, tok):
-            if not oname:
+            if not oname or oname.strip().lower() not in self.objects:
                 return False
-            # print("fieldlookup", oname, tok)
-            test = self.objects[ oname ]()
+            o = self.objects[ oname ]
 
-            try:
-                if hasattr(test, tok) or hasattr(test,"_"+tok):
-                    return "ATTR"
-            except:
-                pass
-            try:
-                if tok in test or "_"+tok in test:
-                    return "KEY"
-            except:
-                pass
+            if tok in o or "_"+tok in o:
+                return True
 
-            # print(test, tok)
             return False
+
 
         if args[0] in self.actions:
             lex = shlex.shlex(line, posix=True)
@@ -310,7 +333,7 @@ class DMRsh( cmd.Cmd ):
             lastattr = None
             bo = None
             for tok in lex:
-                t = fieldlookup(bo, tok)
+                t = "ATTR" if fieldlookup(bo, tok) else False
                 if tok.lower() == "with":
                     tok = ("WITH", tok)
                 elif tok in actions:
@@ -334,7 +357,7 @@ class DMRsh( cmd.Cmd ):
                 return
             else:
                 if ctx[0][0] == "ACT":
-                    self.actions[ ctx[0][1] ](self, ctx)
+                    self.actions[ ctx[0][1] ]( ctx )
                 else:
                     print("Not sure what to do: ")
                     print( ctx )
@@ -365,8 +388,9 @@ class DMRsh( cmd.Cmd ):
         #   for each hybrid bank, get 8 repeaters from the user. 
         #       Each repeater will get an rxgroup for each timeslot where the first tg in the rxgroup will then be used as the tx group.
         #
-        #
-        #   TODO resolve contact references in rxgroups
+        #   Name the repeaters by 
+        #   "%s_%s_%s"%(city, two_letter_state, callsign)
+        #   
 
         """
         syntax target (from clean slate):
@@ -451,13 +475,15 @@ class DMRsh( cmd.Cmd ):
             print("Select a radio first")
 
     def do_eval( self, line ):
-        try:
-            print(eval(line))
-        except Exception as e:
-            print(e)
+        print(eval(line))
+        # try:
+            # print(eval(line))
+        # except Exception as e:
+            # print(e)
 
     def do_EOF( self, arg ):
         return True
+
     def do_exit( self, line):
         sys.exit(0)
 
@@ -492,13 +518,12 @@ class DMRsh( cmd.Cmd ):
         return stop
 
     def preloop( self ):
-        self.updateprompt()
-        try:
-            fh = open("my.script","r")
-            for line in fh:
+        fh = open("my.script","r")
+        for line in fh:
+            if not line.strip().startswith('#'):
                 self.onecmd( line.strip() )
-        except Exception as e:
-            print(e)
+
+        self.updateprompt()
 
 
 
