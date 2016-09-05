@@ -13,6 +13,19 @@ from drivers import md380
 import errno    
 
 
+# IDEAS:
+    # Talkgroup centric banks
+    #   a bunch of repeaters all txgroup'd for one tg
+    # repeater centric banks
+    #   a bunch of talkgroups on a single repeater
+    # hybrid banks
+    #   a bunch of repeaters in a bank, with two memories each, a bunch of rx tgs and a single tx tg for each timeslot
+    #       
+    #   To fully automate, TGs need to have a consistently parsable format. Doesn't exist right now.
+    #
+    #   later: add location support for repeater adding
+    #       http://stackoverflow.com/questions/9532369/where-can-i-find-city-town-location-data-for-location-based-searching
+
 def mkdir_p(path):
     """http://stackoverflow.com/questions/600268/mkdir-p-functionality-in-python"""
     try:
@@ -73,6 +86,7 @@ class DMRsh( cmd.Cmd, object ):
                 "repeaters":["callsign","country","state","city","locator",
                             "frequency","color_code","offset","ipsc_network",
                             ],
+                "settings":["dmrid"],
                 }
         self.myobjects = {
                 "contact":"contacts",
@@ -83,6 +97,7 @@ class DMRsh( cmd.Cmd, object ):
                 "bank": "get_bank_model", #?
                 "repeater": "dmrdump",
                 "repeaters": "dmrdump",
+                "settings":None, #TODO
                 }
                     # "contacts","rxgroups","channels","banks"]
         self.actions = {
@@ -91,6 +106,7 @@ class DMRsh( cmd.Cmd, object ):
                 "configure": self.fn_configure,
                 "delete": self.fn_delete,
                 "count": self.fn_count,
+                "fieldcount": self.fn_fieldcount,
                 }
 
     def parse( self, line ):
@@ -256,7 +272,7 @@ class DMRsh( cmd.Cmd, object ):
                 setme[ ltok ] = v
             ltok = v
             lpt = pt
-        print( "SELECTME",selectme, "SETME",setme )
+        # print( "SELECTME",selectme, "SETME",setme )
         return (bo, selectme, setme)
 
 
@@ -279,7 +295,7 @@ class DMRsh( cmd.Cmd, object ):
             pass
 
         if len(selectme.keys()) > 0:
-            print( selectme)
+            # print( selectme)
             these = bos.find( **selectme )
         else:
             these = bos
@@ -288,6 +304,18 @@ class DMRsh( cmd.Cmd, object ):
     def fn_count( self, ctx):
         these = self.fn_fetch(ctx)
         print("Rows: %d"%len(these))
+
+    def fn_fieldcount( self, ctx):
+        bo, selectme, setme = self.base_parse(ctx)
+        bos = getattr(self, self.myobjects[ bo ]) #only meant for repeaters, TODO, will except if used on other things
+        counts = bos.fieldcount( *setme.keys(), **selectme)
+
+        print("For filter: %s"%( str(selectme)) )
+        for field,fcounts in counts.items():
+            print(field)
+            print("\tCount\tValue")
+            for n,c in sorted(fcounts.items(), key=lambda x: x[1]):
+                print("\t%d\t%s"%( c, n))
 
     def fn_show( self, ctx):
         these = self.fn_fetch(ctx)
@@ -348,7 +376,8 @@ class DMRsh( cmd.Cmd, object ):
                     tok = ("VALUE", tok)
                 else:
                     tok = ("UNK", tok)
-                print(tok)
+
+                # print(tok)
                 ctx.append( tok )
                 lasttok = tok
 
@@ -366,59 +395,6 @@ class DMRsh( cmd.Cmd, object ):
                 os.system(line)
             except Exception as e:
                 print(e)
-
-        #
-        # banks centered around sending to a talkgroup across multiple repeaters in an area
-        #       a single talkgroup with related talkgroups to listen to (regional, state, etc)
-        #       across multiple close-by repeaters
-        #
-        # banks centered around specific repeaters (talk to tg9, listen to selected regional talkgroups)
-        #       
-        # hybrid, one channel for each TS of each repeater, so 8 repeaters per zone, local zone only and regional zone only depending on TS layout?
-                # add channels repeater location Massachusetts mode DMR band UHF name dmr_ma_uhf
-        #
-        #   tg centric banks require an easily accessible talkgroup listing per-repeater, of which none are easily parsable except by humans. Something to be fixed!
-        #
-        #   for each repeater-centric bank, make an rxgroup for each timeslot like W2FBI_1 where 1 is the timeslot
-        #       then, for each tg that isn't some sentinel (0?) in the rxgroup, make a channel where it is the txgroup and has that same rxgroup
-        #       then, make a bank for it (usually won't be over 16 channels, but if it is, make more banks until it fits, sorted by timeslot if possible?)
-        #       add the channels to the bank
-        #       program
-        #
-        #   for each hybrid bank, get 8 repeaters from the user. 
-        #       Each repeater will get an rxgroup for each timeslot where the first tg in the rxgroup will then be used as the tx group.
-        #
-        #   Name the repeaters by 
-        #   "%s_%s_%s"%(city, two_letter_state, callsign)
-        #   
-
-        """
-        syntax target (from clean slate):
-            (import repeaters database)
-            edit bank 1 name "mike was here" or add bank name "mike also here" (note no index)
-            edit bank "mike was here" style [ manual, repeater, talkgroup, hybrid]
-            for manual:
-                nothing special, everything done manually with some help
-            for hybrid:
-                build off manual, choose a single talkgroup per timeslot:
-                    e.g. TS1 is always 3172, TS2 is always 3125
-                and then add 8 repeaters with that setup
-
-            for repeater:
-                add channel[s] "w2fbi" repeater callsign W2FBI
-                    make a "base" dmrmemory that has the details for this single repeater
-                    tag it with the text after "channel[s]" as the identifier
-                edit c "w2fbi" ts 1 tg 3172 310 311 3
-                                where the first one is the "txgroup" and the rest go in the rxgroup
-                edit c "w2fbi" ts 2 tg 3125 9 8
-
-                edit bank "mike was here" add channels "w2fbi"
-
-            for talkgroup:
-                add channel[s] "ma_dmr" repeaters location Massachusetts, United States 
-                edit channels "ma_dmr" add talkgroup 3125 on timeslot 2
-                add bank "ma_dmr" with channels "ma_dmr"
-        """
 
                 
     def completedefault( self, text, line, begidx, endidx ):
@@ -496,18 +472,6 @@ class DMRsh( cmd.Cmd, object ):
             for l in self.levels:
                 self.prompt = "["+l+"]" + self.prompt
 
-    #later: add location support for repeater adding
-    # http://stackoverflow.com/questions/9532369/where-can-i-find-city-town-location-data-for-location-based-searching
-    def do_test( self, line ):
-        self.dmrdump = DMRDump()
-
-        for r in self.dmrdump.find(country="United States",state="Massachusetts"):
-            print(r['callsign'])
-            # mem = repeater_to_memory( r)
-
-        print( self.dmrdump.fieldcount("ipsc_network", country="United States", state="Massachusetts") )
-        print( self.dmrdump.fieldcount("state", country="United States") )
-        print( self.dmrdump.fieldcount("country" ) )
 
     def precmd( self, line):
         self.updateprompt()
