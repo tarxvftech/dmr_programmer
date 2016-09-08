@@ -241,6 +241,15 @@ class DMRsh( cmd.Cmd, object ):
         res = [os.path.basename(name) for name in res]
         return res
 
+    def do_dmrid( self, line):
+        args = self.parse( line )
+        #temporary
+        if len(args) > 0 and args[0] != '':
+            self.model._memobj.general.dmrid.set_value( int( args[0]))
+            print("Set DMR ID to: ", self.model._memobj.general.dmrid)
+        else:
+            print("DMR ID is: ", self.model._memobj.general.dmrid)
+
 
     # National simplex
     # UHF    1) 441.0000   2) 446.5000   3) 446.0750   4-US & Europe 433.450
@@ -321,7 +330,7 @@ class DMRsh( cmd.Cmd, object ):
         these = self.fn_fetch(ctx)
         for each in these:
             print(each)
-        
+
 
     def fn_configure(self, ctx):
         bo, selectme, setme = self.base_parse(ctx)
