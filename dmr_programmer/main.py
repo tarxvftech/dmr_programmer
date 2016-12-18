@@ -241,6 +241,12 @@ class DMRsh( cmd.Cmd, object ):
         res = [os.path.basename(name) for name in res]
         return res
 
+    def do_hamify( self, line):
+        self.model._memobj.menuoptions.utilities1 = 0xff
+        self.model._memobj.menuoptions.utilities2 = 0x3f
+        self.model._memobj.menuoptions.utilities3 = 0xfb
+        print("Model hamified!")
+
     def do_dmrid( self, line):
         args = self.parse( line )
         #temporary
@@ -441,7 +447,6 @@ class DMRsh( cmd.Cmd, object ):
             print("Select a radio, and instantiate a radio image (load, or sync in) first.")
             return
         args = self.parse(line)
-        print("from_csv is currently breaking frequencies, so keep that in mind")
         self.model.from_csv( args[0] )
 
     def do_save( self, line ):
