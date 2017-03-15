@@ -247,14 +247,36 @@ class DMRsh( cmd.Cmd, object ):
         self.model._memobj.menuoptions.utilities3 = 0xfb
         print("Model hamified!")
 
+    def do_setdefaultzone( self, line ):
+        #zones are indexed starting at 1
+        args = self.parse( line )
+        try:
+            z = int(args[0])
+        except:
+            z = 1
+        self.model._memobj.selectedzone = z
+
     def do_dmrid( self, line):
         args = self.parse( line )
         #temporary
         if len(args) > 0 and args[0] != '':
-            self.model._memobj.general.dmrid.set_value( int( args[0]))
-            print("Set DMR ID to: ", self.model._memobj.general.dmrid)
-        else:
-            print("DMR ID is: ", self.model._memobj.general.dmrid)
+            newid = None
+            try:
+                newid = int( args[0] )
+            except:
+                pass
+            try:
+                if newid is None:
+                    idx, contact = self.model.find_contact_by_name( args[0] )
+                    print(idx, contact)
+                    newid = contact.callid
+            except:
+                pass
+            if newid is None:
+                raise(Exception("invalid dmrid reference or value"))
+            self.model._memobj.general.dmrid.set_value( newid )
+        did = int(self.model._memobj.general.dmrid)
+        print("DMRID is 0x%x / %s"%(did,did))
 
 
     # National simplex
