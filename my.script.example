@@ -64,7 +64,7 @@
 ##
 ## Let's add all the NE-TRBO repeaters, using those rxgroups, all at once!
 ##  It's magic.
-#  self.model.add_memories( self.dmrdump.rxgroups_and_repeaters_to_memories( self.model, ("NEDECN_1","NE    DECN_2"), self.dmrdump.find(ipsc_network="NE-TRBO")))
+#  self.model.add_memories( self.dmrdump.rxgroups_and_repeaters_to_memories( self.model, ("NEDECN_1","NEDECN_2"), self.dmrdump.find(ipsc_network="NE-TRBO")))
 
 ## Write the current radio image to the radio
 ##  Currently banks are just based on channel numerical order, 
