@@ -243,7 +243,7 @@ class DMRsh( cmd.Cmd, object ):
 
     def do_hamify( self, line):
         self.model._memobj.menuoptions.utilities1 = 0xff
-        self.model._memobj.menuoptions.utilities2 = 0x3f
+        self.model._memobj.menuoptions.utilities2 = 0xbf
         self.model._memobj.menuoptions.utilities3 = 0xfb
         print("Model hamified!")
 
